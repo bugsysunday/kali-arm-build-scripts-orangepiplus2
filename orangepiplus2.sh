@@ -50,13 +50,13 @@ mkdir -p ${basedir}
 cd ${basedir}
 
 # create the rootfs - not much to modify here, except maybe the hostname.
-debootstrap --foreign --arch $architecture kali-rolling kali-$architecture http://192.168.8.167:32769/$mirror/kali
+debootstrap --foreign --arch $architecture kali-rolling kali-$architecture http://192.168.8.168:32769/$mirror/kali
 
 cp /usr/bin/qemu-arm-static kali-$architecture/usr/bin/
 
 LANG=C chroot kali-$architecture /debootstrap/debootstrap --second-stage
 cat << EOF > kali-$architecture/etc/apt/sources.list
-deb http://192.168.8.167:32769/$mirror/kali kali-rolling main contrib non-free
+deb http://192.168.8.168:32769/$mirror/kali kali-rolling main contrib non-free
 EOF
 
 echo "orangepi" > kali-$architecture/etc/hostname
@@ -147,7 +147,7 @@ umount kali-$architecture/dev/pts
 umount kali-$architecture/dev/
 umount kali-$architecture/proc
 # Create the disk and partition it
-dd if=/dev/zero of=${basedir}/kali-$1-orangepiplus2.img bs=1M count=7000
+dd if=/dev/zero of=${basedir}/kali-$1-orangepiplus2.img bs=1M count=3800
 parted kali-$1-orangepiplus2.img --script -- mklabel msdos
 parted kali-$1-orangepiplus2.img --script -- mkpart primary fat32 2048s 264191s
 parted kali-$1-orangepiplus2.img --script -- mkpart primary ext4 264192s 100%
@@ -171,7 +171,7 @@ rsync -HPavz -q ${basedir}/kali-$architecture/ ${basedir}/rootp/
 echo "T1:12345:respawn:/sbin/agetty -L ttyS0 115200 vt100" >> ${basedir}/rootp/etc/inittab
 # Load the ethernet module since it doesn't load automatically at boot.
 
-cat > ${basedir}/rootp/etc/modules << _EOF_
+cat << EOF > ${basedir}/rootp/etc/modules
 # /etc/modules: kernel modules to load at boot time.
 #
 # This file contains the names of kernel modules that should be loaded
@@ -186,13 +186,12 @@ cat > ${basedir}/rootp/etc/modules << _EOF_
 8189es
 ## GPIO
 #gpio-sunxi
-_EOF_
-
+EOF
 
 
 cat << EOF > ${basedir}/rootp/etc/apt/sources.list
-deb http://192.168.8.167:32769/http.kali.org/kali kali-rolling main non-free contrib
-deb-src http://192.168.8.167:32769/http.kali.org/kali kali-rolling main non-free contrib
+deb http://192.168.8.168:32769/http.kali.org/kali kali-rolling main non-free contrib
+deb-src http://192.168.8.168:32769/http.kali.org/kali kali-rolling main non-free contrib
 EOF
 
 # Uncomment this if you use apt-cacher-ng otherwise git clones will fail.
@@ -217,56 +216,59 @@ cd ..
 make -j $(grep -c processor /proc/cpuinfo) $CONFIG > /dev/null 2>&1
 echo " Build u-boot..."
 echo -e "\e[1;31m Build U-boot \e[0m"
-make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}-
-cp ${basedir}/uboot/u-boot-sunxi-with-spl.bin ${basedir}/bootp -rf
+make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}-  > /dev/null 2>&1
+cp ${basedir}/uboot/u-boot-sunxi-with-spl.bin ${basedir}/bootp -rf  > /dev/null 2>&1
 echo "*****compile uboot ok*****"
-cp ${basedir}/external/Legacy_patch/uboot/orangepi.cmd ${basedir}/bootp/ -rf
-cd ${basedir}/bootp/
+cp ${basedir}/external/Legacy_patch/uboot/orangepi.cmd ${basedir}/bootp/ -rf  > /dev/null 2>&1
+cd ${basedir}/bootp/ 
 sed -i '/sun8i-h3/d' orangepi.cmd
 linenum=`grep -n "uImage" orangepi.cmd | awk '{print $1}' | awk -F: '{print $1}'`
 sed -i "${linenum}i fatload mmc 0 0x46000000 ${dts}" orangepi.cmd
-chmod +x orangepi.cmd u-boot-sunxi-with-spl.bin
-mkimage -C none -A arm -T script -d ${basedir}/bootp/orangepi.cmd ${basedir}/bootp/boot.scr
-
-#dd if=u-boot-sunxi-with-spl.bin of=$loopdevice bs=1024 seek=8
+chmod +x orangepi.cmd u-boot-sunxi-with-spl.bin  > /dev/null 2>&1
+mkimage -C none -A arm -T script -d ${basedir}/bootp/orangepi.cmd ${basedir}/bootp/boot.scr  > /dev/null 2>&1
+#dd if=u-boot-sunxi-with-spl.bin of=$loopdevice  bs=1K seek=8 conv=notrunc
+cd ${basedir}/external/Legacy_patch/orange
+dd if=boot0_OPI.fex of=$loopdevice bs=1k seek=8 conv=notrunc  > /dev/null 2>&1
+dd if=u-boot_OPI.fex of=$loopdevice bs=1k seek=16400 conv=notrunc  > /dev/null 2>&1
 ##############
 #${basedir}/
 cd ${basedir}/external/Legacy_patch/rootfs-test1
-mkdir run
+mkdir -p run
 mkdir -p conf/conf.d
 find . | cpio --quiet -o -H newc > ../rootfs-lobo.img
 cd ..
-gzip rootfs-lobo.img
+gzip rootfs-lobo.img 
 cd ${basedir}/kernel
 LINKERNEL_DIR=`pwd`
 mkdir -p ${basedir}/rootp/lib/
 mkdir -p ${basedir}/kernel/output/
+chmod +x ${basedir}/kernel/output > /dev/null 2>&1
 cp ${basedir}/external/Legacy_patch/rootfs-lobo.img.gz ${basedir}/kernel/output/rootfs.cpio.gz
-chmod +x ${basedir}/kernel/output/*
+chmod +x ${basedir}/kernel/output
 cp ${basedir}/kernel/output/rootfs.cpio.gz ${basedir}/kernel/output/
 cp ${basedir}/external/Legacy_patch/Kconfig.piplus drivers/net/ethernet/sunxi/eth/Kconfig
 cp ${basedir}/external/Legacy_patch/sunxi_geth.c.piplus drivers/net/ethernet/sunxi/eth/sunxi_geth.c
-cp ${basedir}/external/Legacy_patch/sun8iw7p1smp_linux_defconfig arch/arm/configs/sun8iw7p1smp_linux_defconfig
+cp ${basedir}/external/Legacy_patch/sun8iw7p1smp_linux_defconfig  arch/arm/configs/sun8iw7p1smp_linux_defconfig
 sleep 1
 echo -e "\e[1;31m Building kernel for OrangePi-plus2e ...\e[0m"
 if [ ! -f ${basedir}/kernel/.config ]; then
 echo -e "\e[1;31m Configuring ... \e[0m"
 make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- mrproper > /dev/null 2>&1
-make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- sun8iw7p1smp_linux_defconfig 
+make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- sun8iw7p1smp_linux_defconfig  > /dev/null 2>&1
 fi
 sleep 1
 # build kernel (use -jN, where N is number of cores you can spare for building)
 echo -e "\e[1;31m Building Kernel and Modules \e[0m"
-make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- uImage
+make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- uImage > /dev/null 2>&1
 #==================================================
 # copy uImage to output
-cp arch/arm/boot/uImage ${basedir}/bootp/uImage_plus2e
-make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- modules
+cp arch/arm/boot/uImage ${basedir}/bootp/uImage_OPI-PLUS > /dev/null 2>&1
+make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- modules > /dev/null 2>&1
 sleep 1
 echo -e "\e[1;31m Exporting Modules \e[0m"
-make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- INSTALL_MOD_PATH=${basedir}/rootp modules_install
+make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- INSTALL_MOD_PATH=${basedir}/rootp modules_install > /dev/null 2>&1
 echo -e "\e[1;31m Exporting Firmware ... \e[0m"
-make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- INSTALL_MOD_PATH=${basedir}/rootp firmware_install
+make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- INSTALL_MOD_PATH=${basedir}/rootp firmware_install > /dev/null 2>&1
 sleep 1
 # build mali driver
 ##########################
@@ -274,7 +276,7 @@ SCRIPT_DIR=`pwd`
 cd ${basedir}/kernel
 # ####################################
 # Copy config file to config directory
-make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- sun8iw7p1smp_linux_defconfig 
+make -j $(grep -c processor /proc/cpuinfo) ARCH=arm CROSS_COMPILE=${cross_comp}- sun8iw7p1smp_linux_defconfig  > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "  Error: defconfig."
     exit 1
@@ -286,21 +288,21 @@ KDIR=`pwd`
 export LICHEE_MOD_DIR=${LICHEE_KDIR}/rootp/lib/modules/${KERNEL_VERSION}
 mkdir -p $LICHEE_MOD_DIR/kernel/drivers/gpu/mali
 mkdir -p $LICHEE_MOD_DIR/kernel/drivers/gpu/ump
-export LICHEE_KDIR
+export LICHEE_KDIR 
 export MOD_DIR=${LICHEE_KDIR}/rootp/lib/modules/${KERNEL_VERSION}
 export KDIR
 cd modules/mali
-make ARCH=arm CROSS_COMPILE=${cross_comp}- clean
+make ARCH=arm CROSS_COMPILE=${cross_comp}- clean  > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "  Error: clean."
     exit 1
 fi
-make ARCH=arm CROSS_COMPILE=${cross_comp}- build
+make ARCH=arm CROSS_COMPILE=${cross_comp}- build  > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "  Error: build."
     exit 1
 fi
-make ARCH=arm CROSS_COMPILE=${cross_comp}- install
+make ARCH=arm CROSS_COMPILE=${cross_comp}- install  > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "  Error: install."
     exit 1
@@ -312,19 +314,19 @@ echo "  mali build OK."
 cp ${basedir}/../misc/zram ${basedir}/rootp/etc/init.d/zram
 chmod +x ${basedir}/rootp/etc/init.d/zram
 # Unmount partitions
-umount $bootp
-umount $rootp
-kpartx -dv $loopdevice
+umount $bootp  > /dev/null 2>&1
+umount $rootp  > /dev/null 2>&1
+kpartx -dv $loopdevice  > /dev/null 2>&1
 # Clean up all the temporary build stuff and remove the directories.
 # Comment this out to keep things around if you want to see what may have gone
 # wrong.
 echo "Cleaning up the temporary build files..."
-rm -rf ${basedir}/uboot ${basedir}/kernel ${basedir}/bootp ${basedir}/rootp ${basedir}/kali-$architecture ${basedir}/boot ${basedir}/external ${basedir}/toolchain
+rm -rf ${basedir}/uboot ${basedir}/kernel ${basedir}/bootp ${basedir}/rootp ${basedir}/kali-$architecture ${basedir}/boot ${basedir}/external ${basedir}/toolchain ${basedir}/scripts > /dev/null 2>&1
 # If you're building an image for yourself, comment all of this out, as you
 # don't need the sha1sum or to compress the image, since you will be testing it
 # soon.
 echo "Generating sha1sum of kali-$1-orangepiplus2.img"
-sha1sum kali-$1-orangepiplus2.img > ${basedir}/kali-$1-orangepiplus2.img.sha1sum
+sha1sum kali-$1-orangepiplus2.img > ${basedir}/kali-$1-orangepiplus2.img.sha1sum  > /dev/null 2>&1
 ## Don't pixz on 32bit, there isn't enough memory to compress the images.
 #MACHINE_TYPE=`uname -m`
 #if [ ${MACHINE_TYPE} == 'x86_64' ]; then
